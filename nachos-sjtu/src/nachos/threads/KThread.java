@@ -166,6 +166,10 @@ public class KThread {
 
 		Machine.interrupt().restore(intStatus);
 	}
+	
+	public static boolean isReadyEmpty(){
+		return readyQueue.isEmtpy();
+	}
 
 	private void runThread() {
 		begin();
@@ -204,7 +208,14 @@ public class KThread {
 		toBeDestroyed = currentThread;
 
 		currentThread.status = statusFinished;
-
+		
+		if (currentThread.joinQueue != null) {
+			KThread t = currentThread.joinQueue.nextThread();
+			while(t != null){
+				t.ready();
+				t = currentThread.joinQueue.nextThread();
+			}
+		}
 		sleep();
 	}
 
@@ -244,7 +255,7 @@ public class KThread {
 	 * 
 	 * <p>
 	 * If the current thread is blocked (on a synchronization primitive, i.e. a
-	 * <tt>Semaphore</tt>, <tt>Lock</tt>, or <tt>Condition</tt>), eventually
+	 * <tt>Semaphore</tt>, <tt>Lock</tt>, or <tt>Condition2</tt>), eventually
 	 * some thread will wake this thread up, putting it back on the ready queue
 	 * so that it can be rescheduled. Otherwise, <tt>finish()</tt> should have
 	 * scheduled this thread to be destroyed by the next thread to run.
@@ -283,10 +294,35 @@ public class KThread {
 	 * is not guaranteed to return. This thread must not be the current thread.
 	 */
 	public void join() {
-		Lib.debug(dbgThread, "Joining to thread: " + toString());
+		Lib.debug(dbgThread, "Joining to thread: " + toString() + " from "+ currentThread.toString());
 
 		Lib.assertTrue(this != currentThread);
-
+		if (status == statusFinished) return;
+		boolean intStatus = Machine.interrupt().disable();
+		if (joinQueue == null) {
+			joinQueue = ThreadedKernel.scheduler.newThreadQueue(true);
+			joinQueue.acquire(this);
+		}
+		joinQueue.waitForAccess(currentThread);
+		sleep();
+		
+		Machine.interrupt().restore(intStatus);
+	}
+	
+	public void dumpJoinQueue(){
+		System.out.println("### join Q dump ##");
+		joinQueue.print();
+		System.out.println("### end of join Q dump ##");
+	}
+	
+	public static void dumpReadyQueue(){
+		System.out.println("########### ready Queue begin####");
+		readyQueue.print();
+		System.out.println("########### ready Queue end####");
+	}
+	
+	public int getState(){
+		return status;
 	}
 
 	/**
@@ -400,7 +436,7 @@ public class KThread {
 		}
 
 		public void run() {
-			for (int i = 0; i < 5; i++) {
+			for (int i = 0; i < 10; i++) {
 				System.out.println("*** thread " + which + " looped " + i
 						+ " times");
 				KThread.yield();
@@ -456,5 +492,7 @@ public class KThread {
 	private static ThreadQueue readyQueue = null;
 	private static KThread currentThread = null;
 	private static KThread toBeDestroyed = null;
+	//private static KThread toBeJoined = null;
+	private ThreadQueue joinQueue = null;
 	private static KThread idleThread = null;
 }

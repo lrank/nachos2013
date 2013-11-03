@@ -59,7 +59,7 @@ public final class TranslationEntry {
 	public int vpn;
 
 	/** The physical page number. */
-	public int ppn;
+	public int ppn; 
 
 	/**
 	 * If this flag is <tt>false</tt>, this translation entry is ignored.

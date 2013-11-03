@@ -1,5 +1,8 @@
 package nachos.threads;
 
+import java.util.Comparator;
+import java.util.PriorityQueue;
+
 import nachos.machine.*;
 
 /**
@@ -20,6 +23,12 @@ public class Alarm {
 				timerInterrupt();
 			}
 		});
+		//
+		waitQueue = new PriorityQueue<Waiter>(100, new Comparator<Waiter>(){
+			public int compare(Waiter a, Waiter b){
+				return a.time < b.time ? -1 : 1;
+			}
+		});
 	}
 
 	/**
@@ -30,6 +39,13 @@ public class Alarm {
 	 */
 	public void timerInterrupt() {
 		KThread.yield();
+		boolean intStatus = Machine.interrupt().disable();
+		
+		while(!waitQueue.isEmpty() && waitQueue.peek().time <= Machine.timer().getTime()){
+			waitQueue.poll().thread.ready();
+		}
+		
+		Machine.interrupt().restore(intStatus);
 	}
 
 	/**
@@ -46,9 +62,25 @@ public class Alarm {
 	 * @see nachos.machine.Timer#getTime()
 	 */
 	public void waitUntil(long x) {
-		// for now, cheat just to get something working (busy waiting is bad)
-		long wakeTime = Machine.timer().getTime() + x;
-		while (wakeTime > Machine.timer().getTime())
-			KThread.yield();
+		boolean intStatus = Machine.interrupt().disable();
+		
+		long currenttime = Machine.timer().getTime();
+		waitQueue.add(new Waiter(currenttime + x, KThread.currentThread()));
+		KThread.sleep();
+		
+		Machine.interrupt().restore(intStatus);
+	}
+	
+
+	private PriorityQueue<Waiter> waitQueue;
+	
+	protected class Waiter{
+		public Long time;
+		public KThread thread;
+		public Waiter(Long a, KThread b){
+			time = a;
+			thread = b;
+		}
 	}
 }
+
